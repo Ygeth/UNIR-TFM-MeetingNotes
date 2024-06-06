@@ -160,3 +160,8 @@ cython_debug/
 #.idea/
 pyannote-whisper-folder/
 pyannote_whisper/
+data/Google-Formacion1_audio.mp3
+data/Google-Formacion1.mp4
+data/Refinamiento_AQ_audio.mp3
+data/Refinamiento_AQ.mp4
+data/yo.m4a
