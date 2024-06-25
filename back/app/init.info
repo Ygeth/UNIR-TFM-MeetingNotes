@@ -1,0 +1,185 @@
+1. Create and Set Up the Project Directory
+First, create a new directory for your project and navigate into it.
+
+sh
+Copiar código
+mkdir fastapi-video-upload
+cd fastapi-video-upload
+2. Set Up a Virtual Environment
+Create a virtual environment to manage your project dependencies.
+
+sh
+Copiar código
+python3 -m venv venv
+source venv/bin/activate
+3. Install FastAPI and Uvicorn
+Install FastAPI and Uvicorn. Uvicorn is an ASGI server used to run FastAPI applications.
+
+sh
+Copiar código
+pip install fastapi uvicorn python-multipart
+4. Create the Project Structure
+Set up the project structure as follows:
+
+css
+Copiar código
+fastapi-video-upload/
+├── main.py
+├── models.py
+├── schemas.py
+├── crud.py
+├── database.py
+├── routers/
+│   └── video.py
+└── uploads/
+5. Configure the Database
+For simplicity, we'll use SQLite in this example. Install SQLAlchemy and databases.
+
+sh
+Copiar código
+pip install sqlalchemy databases sqlite
+Create database.py to set up the database connection.
+
+python
+Copiar código
+# database.py
+from sqlalchemy import create_engine, MetaData
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+DATABASE_URL = "sqlite:///./test.db"
+
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+metadata = MetaData()
+6. Define the Models
+Create models.py to define the database models.
+
+python
+Copiar código
+# models.py
+from sqlalchemy import Column, Integer, String, DateTime
+from database import Base
+
+class Video(Base):
+    __tablename__ = "videos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, index=True)
+    description = Column(String, index=True)
+    filename = Column(String, index=True)
+    uploaded_at = Column(DateTime)
+7. Create Schemas
+Create schemas.py to define the Pydantic models.
+
+python
+Copiar código
+# schemas.py
+from pydantic import BaseModel
+from datetime import datetime
+
+class VideoBase(BaseModel):
+    title: str
+    description: str
+
+class VideoCreate(VideoBase):
+    pass
+
+class Video(VideoBase):
+    id: int
+    filename: str
+    uploaded_at: datetime
+
+    class Config:
+        orm_mode = True
+8. Create CRUD Operations
+Create crud.py to handle the database operations.
+
+python
+Copiar código
+# crud.py
+from sqlalchemy.orm import Session
+from datetime import datetime
+from models import Video
+from schemas import VideoCreate
+
+def get_video(db: Session, video_id: int):
+    return db.query(Video).filter(Video.id == video_id).first()
+
+def create_video(db: Session, video: VideoCreate, filename: str):
+    db_video = Video(**video.dict(), filename=filename, uploaded_at=datetime.utcnow())
+    db.add(db_video)
+    db.commit()
+    db.refresh(db_video)
+    return db_video
+9. Create the API Router
+Create routers/video.py for the video endpoints.
+
+python
+Copiar código
+# routers/video.py
+from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
+from sqlalchemy.orm import Session
+from database import SessionLocal, engine
+from models import Video
+from schemas import Video, VideoCreate
+from crud import get_video, create_video
+import shutil
+import os
+
+router = APIRouter()
+
+# Dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@router.post("/videos/", response_model=Video)
+async def upload_video(
+    title: str, description: str, file: UploadFile = File(...), db: Session = Depends(get_db)
+):
+    filename = f"uploads/{file.filename}"
+    with open(filename, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    video_create = VideoCreate(title=title, description=description)
+    return create_video(db=db, video=video_create, filename=file.filename)
+
+@router.get("/videos/{video_id}", response_model=Video)
+def read_video(video_id: int, db: Session = Depends(get_db)):
+    db_video = get_video(db, video_id=video_id)
+    if db_video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    return db_video
+10. Create the Main Application
+Finally, set up main.py to create the FastAPI application and include the router.
+
+python
+Copiar código
+# main.py
+from fastapi import FastAPI
+from database import engine, Base
+from routers import video
+
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI()
+
+app.include_router(video.router)
+11. Run the Application
+Run the FastAPI application using Uvicorn.
+
+sh
+Copiar código
+uvicorn main:app --reload
+This will start the server at http://127.0.0.1:8000. You can now use this URL to upload videos and retrieve video data. The uploads/ directory will store the uploaded video files.
+
+
+
+
+
+
